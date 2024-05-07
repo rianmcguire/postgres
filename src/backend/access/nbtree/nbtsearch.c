@@ -2183,7 +2183,8 @@ _bt_readnextpage(IndexScanDesc scan, BlockNumber blkno, ScanDirection dir)
 			 * if we're at end of scan, give up and mark parallel scan as
 			 * done, so that all the workers can finish their scan
 			 */
-			if (blkno == P_NONE || !so->currPos.moreRight)
+			if (blkno == P_NONE || !so->currPos.moreRight ||
+				(unlikely(scan->xs_page_limit > 0) && ++scan->xs_pages_visited > scan->xs_page_limit))
 			{
 				_bt_parallel_done(scan);
 				BTScanPosInvalidate(so->currPos);
@@ -2260,8 +2261,11 @@ _bt_readnextpage(IndexScanDesc scan, BlockNumber blkno, ScanDirection dir)
 
 		for (;;)
 		{
-			/* Done if we know there are no matching keys to the left */
-			if (!so->currPos.moreLeft)
+			/* Done if we know there are no matching keys to the left, or the
+			 * page limit is exceeded.
+			 */
+			if (!so->currPos.moreLeft ||
+				(unlikely(scan->xs_page_limit > 0) && ++scan->xs_pages_visited > scan->xs_page_limit))
 			{
 				_bt_relbuf(rel, so->currPos.buf);
 				_bt_parallel_done(scan);

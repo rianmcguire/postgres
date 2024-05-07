@@ -6325,9 +6325,9 @@ get_actual_variable_endpoint(Relation heapRel,
 	 *
 	 * Despite all this care, there are situations where we might find many
 	 * non-visible tuples near the end of the index.  We don't want to expend
-	 * a huge amount of time here, so we give up once we've read too many heap
-	 * pages.  When we fail for that reason, the caller will end up using
-	 * whatever extremal value is recorded in pg_statistic.
+	 * a huge amount of time here, so we give up once we've read too many index
+	 * or heap pages.  When we fail for that reason, the caller will end up
+	 * using whatever extremal value is recorded in pg_statistic.
 	 */
 	InitNonVacuumableSnapshot(SnapshotNonVacuumable,
 							  GlobalVisTestFor(heapRel));
@@ -6338,6 +6338,10 @@ get_actual_variable_endpoint(Relation heapRel,
 	/* Set it up for index-only scan */
 	index_scan->xs_want_itup = true;
 	index_rescan(index_scan, scankeys, 1, NULL, 0);
+
+	/* Don't index scan forever; correctness is not an issue here */
+#define VISITED_PAGES_LIMIT 100
+	index_scan->xs_page_limit = VISITED_PAGES_LIMIT;
 
 	/* Fetch first/next tuple in specified direction */
 	while ((tid = index_getnext_tid(index_scan, indexscandir)) != NULL)
@@ -6361,7 +6365,6 @@ get_actual_variable_endpoint(Relation heapRel,
 				 * since other recently-accessed pages are probably still in
 				 * buffers too; but it's good enough for this heuristic.
 				 */
-#define VISITED_PAGES_LIMIT 100
 
 				if (block != last_heap_block)
 				{
